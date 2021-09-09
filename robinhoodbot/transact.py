@@ -1,7 +1,7 @@
 import logging
 import typing
 
-import robin_stocks.robinhood
+import robin_stocks.robinhood as rh
 
 def sell(symbol: str, holdings, dry_run: bool):
     """ Place an order to sell all holdings of a stock.
@@ -13,14 +13,21 @@ def sell(symbol: str, holdings, dry_run: bool):
     shares_owned = int(float(holdings[symbol].get("quantity")))
     logging.info("####### Selling " + str(shares_owned) + " shares of " + symbol + " #######")
     if not dry_run:
-        robinhood.order_sell_market(symbol, shares_owned)
+        rh.order_sell_market(symbol, shares_owned)
 
 def buy(syms: typing.List[str], profile, holdings, dry_run: bool):
     """Buy holdings of stock, matching average holdings in the rest of your portfolio (magic?)."""
     cash = float(profile.get('cash'))
     portfolio_value = float(profile.get('equity')) - cash
-    ideal_position_size = (safe_division(portfolio_value, len(holdings))+cash/len(syms))/(2 * len(syms))
-    prices = robinhood.get_latest_price(syms)
+
+    ideal_position_size = 0
+    if len(holdings) == 0:
+        logging.info("found no holdings: set ideal position to 0?")
+    else:
+        ideal_position_size = (portfolio_value / len(holdings)) + (cash/len(syms) / (2 * len(syms)))
+
+    logging.info("I think the ideal position size may be %s", ideal_position_size)
+    prices = rh.get_latest_price(syms)
 
     for i in range(0, len(syms)):
         stock_price = float(prices[i])
@@ -34,8 +41,4 @@ def buy(syms: typing.List[str], profile, holdings, dry_run: bool):
 
         logging.info("####### Buying " + str(num_shares) + " shares of " + syms[i] + " #######")
         if not dry_run:
-            robinhood.order_buy_market(syms[i], num_shares)
-
-def safe_division(n, d):
-    return n / d if d else 0
-
+            rh.order_buy_market(syms[i], num_shares)

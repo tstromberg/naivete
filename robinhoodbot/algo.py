@@ -1,14 +1,14 @@
 import logging
 import argparse
 
-import robin_stocks.robinhood
+import robin_stocks.robinhood as rh
 import pandas
 import numpy
 import ta
 
 import folio
 
-def golden_cross(sym: str, n1: int, n2: int, days: int, direction: str):
+def golden_cross(sym: str, n1: int, n2: int, days: int, direction: str) -> bool:
     """Determine if a golden/death cross has occured for a specified stock in the last X trading days
 
     Args:
@@ -23,13 +23,13 @@ def golden_cross(sym: str, n1: int, n2: int, days: int, direction: str):
         1 if the short-term indicator crosses above the long-term one
         0 if there is no cross between the indicators
         -1 if the short-term indicator crosses below the long-term one
-        False if direction == "above" and five_year_check(sym) returns False, meaning that we're considering whether to
+        False if direction == "above" and five_year_rise(sym) returns False, meaning that we're considering whether to
             buy the stock but it hasn't risen overall in the last five years, suggesting it contains fundamental issues
     """
-    if(direction == "above" and not five_year_check(sym)):
+    if(direction == "above" and not five_year_rise(sym)):
         return False
     
-    history = folio.historicals(sym, "day", "year", "regular")
+    history = rh.get_stock_historicals(sym,interval="day",span="year",bounds="regular")
 
     #Couldn't get pricing data
     if(history is None or None in history):
@@ -52,7 +52,40 @@ def golden_cross(sym: str, n1: int, n2: int, days: int, direction: str):
     return cross
 
 
-def five_year_check(sym):
+def lowish(sym: str) -> bool:
+    """Is the stock low?"""
+    history = rh.get_stock_historicals(sym,interval="day",span="year",bounds="regular")
+    current = float(rh.get_latest_price(sym, priceType="bid_price")[0])
+    logging.info("%s price is %s", sym, current)
+
+    lowest = 2**32.0
+    highest = -1.0
+
+    for h in history:
+        low = float(h['low_price'])
+        if low == 0.0:
+            logging.info("%s bad data: low=0.0: %s", sym, h)
+            continue
+
+        if low < lowest:
+            lowest = low
+
+        high = float(h['high_price'])
+        if high == 0.0:
+            logging.info("%s bad data: high=0.0: %s", sym, h)
+            continue
+
+        if high > highest:
+            highest = high
+
+    if current < lowest * 1.1:
+        logging.info("%s buy suggest: %s is near %s", sym, current, lowest)
+
+    if current > highest * 0.95:
+        logging.info("%s sell suggest: %s is near %s", sym, current, highest)
+
+
+def five_year_rise(sym: str) -> bool:
     """Figure out if a stock has risen or been created within the last five years.
 
     Args:
@@ -62,7 +95,7 @@ def five_year_check(sym):
         True if the stock's current price is higher than it was five years ago, or the stock IPO'd within the last five years
         False otherwise
     """
-    instrument = robinhood.get_instruments_by_symbols(sym)
+    instrument = rh.get_instruments_by_symbols(sym)
     if(instrument is None or len(instrument) == 0):
         return True
     list_date = instrument[0].get("list_date")

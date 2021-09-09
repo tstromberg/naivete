@@ -8,12 +8,14 @@ def sells(portfolio: str) -> typing.List[str]:
 
     for symbol in portfolio:
         logging.info("symbol: %s", symbol)
-        cross = algo.golden_cross(symbol, n1=50, n2=200, days=30, direction="below")
-        if cross != -1:
-            continue
 
-        logging.info("%s had a golden crossing (below)!", symbol)
-        set.add(symbol)
+        if algo.golden_cross(symbol, n1=50, n2=200, days=30, direction="below") == -1:
+            logging.info("%s had a golden crossing (below)!", symbol)
+            set.add(symbol)
+
+        if algo.lowish(symbol):
+            logging.info("%s is lowish", symbol)
+            set.add(symbol)
 
     return sells
 
